@@ -6,6 +6,7 @@
 <style>
   body { font-family: -apple-system, Segoe UI, sans-serif; margin: 0; background: #f4f4f6; color: #222; }
   header { background: #2d3e50; color: #fff; padding: 16px 24px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  header select { font-size: 15px; padding: 8px; margin-left: 6px; }
   header h1 { font-size: 20px; margin: 0 16px 0 0; }
   button { font-size: 15px; padding: 10px 18px; border: 0; border-radius: 6px; cursor: pointer; background: #3b82f6; color: #fff; }
   button:disabled { opacity: .4; cursor: default; }
@@ -26,12 +27,14 @@
 <body>
 <header>
   <h1>📷 Scan Splitter</h1>
+  <label>Scan background:
+    <select id="bg"><option value="white" selected>White</option><option value="black">Black</option></select></label>
   <button id="load">1. Choose folder with scans</button>
   <button id="save" class="save" disabled>2. Save photos</button>
   <span id="status"></span>
 </header>
 <main>
-  <p class="help" id="help">Click <b>“Choose folder with scans”</b>. The app finds every photo on each scan.
+  <p class="help" id="help">Pick the <b>scan background</b> colour (white or black), then click <b>“Choose folder with scans”</b>. The app finds every photo on each scan.
     Then use ⟲ / ⟳ to turn photos upright, untick any you don't want, and click <b>“Save photos”</b>.
     Files are saved into a new <b>split</b> folder inside your scans folder.</p>
   <div class="grid" id="grid"></div>
@@ -50,7 +53,7 @@ $('#load').onclick = async () => {
   for (let i = 0; i < r.files.length; i++) {
     $('#status').textContent = `Processing ${i + 1} / ${r.files.length}: ${r.files[i]}`;
     const res = await fetch('/api/process', {method: 'POST', headers: {'Content-Type': 'application/json'},
-                                             body: JSON.stringify({file: r.files[i]})});
+                                             body: JSON.stringify({file: r.files[i], background: $('#bg').value})});
     if (!res.ok) continue;
     for (const c of (await res.json()).crops) addCard(c);
   }
