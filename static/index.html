@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scan Splitter</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, sans-serif; margin: 0; background: #f4f4f6; color: #222; }
+  header { background: #2d3e50; color: #fff; padding: 16px 24px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  header h1 { font-size: 20px; margin: 0 16px 0 0; }
+  button { font-size: 15px; padding: 10px 18px; border: 0; border-radius: 6px; cursor: pointer; background: #3b82f6; color: #fff; }
+  button:disabled { opacity: .4; cursor: default; }
+  button.save { background: #16a34a; }
+  #status { margin-left: auto; font-size: 14px; }
+  main { padding: 20px 24px; }
+  .help { color: #555; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+  .card { background: #fff; border-radius: 8px; padding: 10px; box-shadow: 0 1px 3px #0002; text-align: center; }
+  .card.off { opacity: .35; }
+  .imgbox { height: 220px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .imgbox img { max-width: 200px; max-height: 200px; transition: transform .2s; }
+  .card .name { font-size: 12px; color: #666; margin: 6px 0; word-break: break-all; }
+  .card .tools button { padding: 6px 12px; font-size: 18px; background: #e5e7eb; color: #222; }
+  .card label { font-size: 13px; display: block; margin-top: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📷 Scan Splitter</h1>
+  <button id="load">1. Choose folder with scans</button>
+  <button id="save" class="save" disabled>2. Save photos</button>
+  <span id="status"></span>
+</header>
+<main>
+  <p class="help" id="help">Click <b>“Choose folder with scans”</b>. The app finds every photo on each scan.
+    Then use ⟲ / ⟳ to turn photos upright, untick any you don't want, and click <b>“Save photos”</b>.
+    Files are saved into a new <b>split</b> folder inside your scans folder.</p>
+  <div class="grid" id="grid"></div>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+let items = [];
+
+$('#load').onclick = async () => {
+  $('#status').textContent = 'Waiting for folder selection…';
+  const r = await (await fetch('/api/choose-folder', {method: 'POST'})).json();
+  if (!r.folder) { $('#status').textContent = ''; return; }
+  if (!r.files.length) { $('#status').textContent = 'No images found in that folder.'; return; }
+  await fetch('/api/reset', {method: 'POST'});
+  items = []; $('#grid').innerHTML = ''; $('#save').disabled = true; $('#load').disabled = true;
+  for (let i = 0; i < r.files.length; i++) {
+    $('#status').textContent = `Processing ${i + 1} / ${r.files.length}: ${r.files[i]}`;
+    const res = await fetch('/api/process', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                             body: JSON.stringify({file: r.files[i]})});
+    if (!res.ok) continue;
+    for (const c of (await res.json()).crops) addCard(c);
+  }
+  $('#status').textContent = `Found ${items.length} photos. Fix rotation, then save.`;
+  $('#load').disabled = false; $('#save').disabled = items.length === 0;
+};
+
+function addCard(c) {
+  const it = {id: c.id, rotation: 0, keep: true}; items.push(it);
+  const d = document.createElement('div'); d.className = 'card';
+  d.innerHTML = `<div class="imgbox"><img src="/api/thumb/${c.id}"></div>
+    <div class="name">${c.name}</div>
+    <div class="tools"><button title="Rotate left">⟲</button> <button title="Rotate right">⟳</button></div>
+    <label><input type="checkbox" checked> keep</label>`;
+  const img = d.querySelector('img'), [l, r] = d.querySelectorAll('.tools button');
+  const upd = () => img.style.transform = `rotate(${it.rotation}deg)`;
+  l.onclick = () => { it.rotation = (it.rotation + 270) % 360; upd(); };
+  r.onclick = () => { it.rotation = (it.rotation + 90) % 360; upd(); };
+  d.querySelector('input').onchange = e => { it.keep = e.target.checked; d.classList.toggle('off', !it.keep); };
+  $('#grid').appendChild(d);
+}
+
+$('#save').onclick = async () => {
+  $('#status').textContent = 'Saving…'; $('#save').disabled = true;
+  const r = await (await fetch('/api/save', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                             body: JSON.stringify({items})})).json();
+  $('#status').textContent = `Saved ${r.saved} photos to ${r.folder}`; $('#save').disabled = false;
+};
+</script>
+</body>
+</html>
